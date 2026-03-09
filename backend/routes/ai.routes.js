@@ -11,13 +11,13 @@ router.post('/chat', async (req, res) => {
             return res.status(400).json({ error: 'Please provide a movie preference prompt.' });
         }
 
-        // For local MVP where user might not have OPENAI_API_KEY set yet, return mock if it fails 
+        // For local MVP where user might not have GEMINI_API_KEY set yet, return mock if it fails 
         // to prevent UI crash, but try real first.
-        if (!process.env.OPENAI_API_KEY) {
+        if (!process.env.GEMINI_API_KEY) {
              return res.json({
                 signals: { genres_include: ["Sci-Fi"], vibe: "Mock Mode. API Key not found." },
                 movies: [],
-                top_explanation: "Please add your OPENAI_API_KEY to the backend/.env file to see real AI magic!"
+                top_explanation: "Please add your GEMINI_API_KEY to the backend/.env file to see real AI magic!"
              });
         }
 

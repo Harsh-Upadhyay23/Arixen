@@ -39,7 +39,7 @@ const Home = () => {
             
         } catch (err) {
             console.error(err);
-            setError("Failed to get AI recommendations. Make sure backend is running and OpenAI key is set.");
+            setError("Failed to get AI recommendations. Make sure backend is running and Gemini API key is set.");
         } finally {
             setLoadingAI(false);
         }

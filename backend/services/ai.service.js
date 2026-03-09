@@ -1,24 +1,19 @@
-import { OpenAI } from 'openai';
+import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import Movie from '../models/movie.model.js';
 
 dotenv.config();
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-});
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const getAIRecommendations = async (userPrompt) => {
     try {
         console.log(`Analyzing Prompt: "${userPrompt}"`);
         
-        // 1. Extract intent using OpenAI
-        const completion = await openai.chat.completions.create({
-            model: "gpt-4o",
-            messages: [
-                {
-                    role: "system",
-                    content: `You are a movie recommendation assistant. Extract the user's movie preferences from their text. You MUST return ONLY a raw JSON strictly adhering to the following structure, with NO markdown formatting, NO backticks, and NO conversational text.
+        // 1. Extract intent using Gemini
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            systemInstruction: `You are a movie recommendation assistant. Extract the user's movie preferences from their text. You MUST return ONLY a raw JSON strictly adhering to the following structure, with NO markdown formatting, NO backticks, and NO conversational text.
 
 {
     "genres_include": ["genre1", "genre2"],
@@ -27,17 +22,19 @@ export const getAIRecommendations = async (userPrompt) => {
     "vibe": "a short description of the mood or vibe"
 }
 
-If you cannot find specific genres or keywords, leave the arrays empty.`
-                },
+If you cannot find specific genres or keywords, leave the arrays empty.`,
+            contents: [
                 {
                     role: "user",
-                    content: userPrompt
+                    parts: [{ text: userPrompt }]
                 }
             ],
-            temperature: 0.1,
+            config: {
+                temperature: 0.1,
+            }
         });
 
-        const rawResponse = completion.choices[0].message.content.trim();
+        const rawResponse = response.text.trim();
         
         // Clean up markdown in case the model failed to follow instructions
         const jsonString = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
@@ -47,12 +44,11 @@ If you cannot find specific genres or keywords, leave the arrays empty.`
             extractedData = JSON.parse(jsonString);
             console.log("Extracted Signals:", extractedData);
         } catch (e) {
-            console.error("Failed to parse JSON from OpenAI:", jsonString);
+            console.error("Failed to parse JSON from Gemini:", jsonString);
             return { error: true, message: "AI failed to extract preferences." };
         }
 
         // 2. Query MongoDB using extracted signals
-        // This is a simplified query for MVP. In a real $100B system, this would be a Vector Search.
         const query = {};
         
         if (extractedData.genres_include && extractedData.genres_include.length > 0) {
@@ -63,7 +59,6 @@ If you cannot find specific genres or keywords, leave the arrays empty.`
         
         if (extractedData.genres_exclude && extractedData.genres_exclude.length > 0) {
             const formattedExtGenres = extractedData.genres_exclude.map(g => g.charAt(0).toUpperCase() + g.slice(1).toLowerCase());
-            // If query.genres already exists as $in, we need to convert to $and
             if (query.genres) {
                 const inQuery = query.genres;
                 delete query.genres;
@@ -77,7 +72,6 @@ If you cannot find specific genres or keywords, leave the arrays empty.`
         }
 
         let similarMovies = [];
-        // If keywords were found, try text search first (requires MongoDB text index)
         if (extractedData.keywords && extractedData.keywords.length > 0) {
             const searchString = extractedData.keywords.join(' ');
             let textQuery = { ...query, $text: { $search: searchString } };
@@ -87,14 +81,12 @@ If you cannot find specific genres or keywords, leave the arrays empty.`
                 .limit(5);
         }
 
-        // Fallback to basic genre match or all movies if text search yielded nothing
         if (similarMovies.length === 0) {
             similarMovies = await Movie.find(query)
                 .sort({ rating: -1 })
                 .limit(5);
         }
 
-        // Default fallback if no match
         if (similarMovies.length === 0) {
             similarMovies = await Movie.find().sort({ rating: -1 }).limit(5);
         }
@@ -102,17 +94,20 @@ If you cannot find specific genres or keywords, leave the arrays empty.`
         // 3. Generate "Why this movie" Explanation for the top result
         let topExplanation = null;
         if (similarMovies.length > 0) {
-             const expl_completion = await openai.chat.completions.create({
-                model: "gpt-4o",
-                messages: [
+             const expl_response = await ai.models.generateContent({
+                model: "gemini-2.5-flash",
+                systemInstruction: `You are an AI movie expert. The user asked for: "${userPrompt}". We are recommending "${similarMovies[0].title}" (Synopsis: ${similarMovies[0].overview}). In 1-2 short, punchy sentences, explain WHY this movie is a perfect match for their request. Focus on the vibe and elements they asked for. Make it sound like a premium Netflix recommendation.`,
+                contents: [
                     {
-                        role: "system",
-                        content: `You are an AI movie expert. The user asked for: "${userPrompt}". We are recommending "${similarMovies[0].title}" (Synopsis: ${similarMovies[0].overview}). In 1-2 short, punchy sentences, explain WHY this movie is a perfect match for their request. Focus on the vibe and elements they asked for. Make it sound like a premium Netflix recommendation.`
+                        role: "user",
+                        parts: [{ text: userPrompt }]
                     }
                 ],
-                temperature: 0.7,
+                config: {
+                    temperature: 0.7,
+                }
             });
-            topExplanation = expl_completion.choices[0].message.content.trim();
+            topExplanation = expl_response.text.trim();
         }
 
         return {

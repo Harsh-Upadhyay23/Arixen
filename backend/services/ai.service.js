@@ -9,20 +9,24 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 export const getAIRecommendations = async (userPrompt) => {
     try {
         console.log(`Analyzing Prompt: "${userPrompt}"`);
-        
-        // 1. Extract intent using Gemini
+
+        // 1. Extract intent using Gemini — strict JSON mode
         const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            systemInstruction: `You are a movie recommendation assistant. Extract the user's movie preferences from their text. You MUST return ONLY a raw JSON strictly adhering to the following structure, with NO markdown formatting, NO backticks, and NO conversational text.
+            model: "gemini-2.0-flash",
+            systemInstruction: `You are a movie preference extractor. Return ONLY a valid JSON object with these exact keys. No markdown, no explanation, no other text.
 
 {
-    "genres_include": ["genre1", "genre2"],
-    "genres_exclude": ["genre3"],
-    "keywords": ["keyword1", "keyword2"],
-    "vibe": "a short description of the mood or vibe"
+  "genres_include": ["Action"],
+  "genres_exclude": [],
+  "keywords": ["thriller", "twist"],
+  "vibe": "dark and intense"
 }
 
-If you cannot find specific genres or keywords, leave the arrays empty.`,
+Rules:
+- genres_include: 1-3 genre strings from: Action, Adventure, Animation, Comedy, Crime, Documentary, Drama, Fantasy, Horror, Mystery, Romance, Science Fiction, Thriller, Western
+- genres_exclude: genres to avoid (can be empty)
+- keywords: 3-5 important words describing mood, theme, era, or style
+- vibe: one short phrase (max 8 words) describing the overall feel`,
             contents: [
                 {
                     role: "user",
@@ -31,83 +35,109 @@ If you cannot find specific genres or keywords, leave the arrays empty.`,
             ],
             config: {
                 temperature: 0.1,
+                responseMimeType: "application/json",
             }
         });
 
         const rawResponse = response.text.trim();
-        
-        // Clean up markdown in case the model failed to follow instructions
         const jsonString = rawResponse.replace(/```json/g, '').replace(/```/g, '').trim();
         let extractedData;
-        
+
         try {
             extractedData = JSON.parse(jsonString);
             console.log("Extracted Signals:", extractedData);
         } catch (e) {
             console.error("Failed to parse JSON from Gemini:", jsonString);
-            return { error: true, message: "AI failed to extract preferences." };
+            // Fallback: try a simple text search with the raw prompt words
+            extractedData = {
+                genres_include: [],
+                genres_exclude: [],
+                keywords: userPrompt.split(' ').slice(0, 5),
+                vibe: "based on your description"
+            };
         }
 
         // 2. Query MongoDB using extracted signals
         const query = {};
-        
+
         if (extractedData.genres_include && extractedData.genres_include.length > 0) {
-            // Capitalize first letter of each genre for TMDB match
-            const formattedIntGenres = extractedData.genres_include.map(g => g.charAt(0).toUpperCase() + g.slice(1).toLowerCase());
-            query.genres = { $in: formattedIntGenres };
+            const formattedGenres = extractedData.genres_include.map(
+                g => g.charAt(0).toUpperCase() + g.slice(1).toLowerCase()
+            );
+            query.genres = { $in: formattedGenres };
         }
-        
+
         if (extractedData.genres_exclude && extractedData.genres_exclude.length > 0) {
-            const formattedExtGenres = extractedData.genres_exclude.map(g => g.charAt(0).toUpperCase() + g.slice(1).toLowerCase());
+            const formattedExclude = extractedData.genres_exclude.map(
+                g => g.charAt(0).toUpperCase() + g.slice(1).toLowerCase()
+            );
             if (query.genres) {
                 const inQuery = query.genres;
                 delete query.genres;
                 query.$and = [
                     { genres: inQuery },
-                    { genres: { $nin: formattedExtGenres } }
+                    { genres: { $nin: formattedExclude } }
                 ];
             } else {
-                query.genres = { $nin: formattedExtGenres };
+                query.genres = { $nin: formattedExclude };
             }
         }
 
+        // Try keyword text search first
         let similarMovies = [];
         if (extractedData.keywords && extractedData.keywords.length > 0) {
             const searchString = extractedData.keywords.join(' ');
-            let textQuery = { ...query, $text: { $search: searchString } };
-            
-            similarMovies = await Movie.find(textQuery)
-                .sort({ score: { $meta: "textScore" }, rating: -1 })
-                .limit(5);
+            const textQuery = { ...query, $text: { $search: searchString } };
+
+            try {
+                similarMovies = await Movie.find(textQuery)
+                    .sort({ score: { $meta: "textScore" }, rating: -1 })
+                    .limit(6);
+            } catch (textSearchErr) {
+                console.warn("Text search failed, falling back to genre query:", textSearchErr.message);
+            }
         }
 
+        // Fallback to genre-only
         if (similarMovies.length === 0) {
-            similarMovies = await Movie.find(query)
-                .sort({ rating: -1 })
-                .limit(5);
+            similarMovies = await Movie.find(query).sort({ rating: -1 }).limit(6);
         }
 
+        // Final fallback — top-rated
         if (similarMovies.length === 0) {
-            similarMovies = await Movie.find().sort({ rating: -1 }).limit(5);
+            similarMovies = await Movie.find().sort({ rating: -1 }).limit(6);
         }
 
-        // 3. Generate "Why this movie" Explanation for the top result
+        // 3. Generate ONE short explanation sentence for the top result
         let topExplanation = null;
         if (similarMovies.length > 0) {
-             const expl_response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                systemInstruction: `You are an AI movie expert. The user asked for: "${userPrompt}". We are recommending "${similarMovies[0].title}" (Synopsis: ${similarMovies[0].overview}). In 1-2 short, punchy sentences, explain WHY this movie is a perfect match for their request. Focus on the vibe and elements they asked for. Make it sound like a premium Netflix recommendation.`,
-                contents: [
-                    {
-                        role: "user",
-                        parts: [{ text: userPrompt }]
+            try {
+                const explResponse = await ai.models.generateContent({
+                    model: "gemini-2.0-flash",
+                    systemInstruction: `You are a movie recommender. Write ONE sentence (max 15 words) explaining why the movie matches what the user asked for. Be specific and direct. No quotes, no extra words.`,
+                    contents: [
+                        {
+                            role: "user",
+                            parts: [{
+                                text: `User asked for: "${userPrompt}". Top result: "${similarMovies[0].title}". Why does it match?`
+                            }]
+                        }
+                    ],
+                    config: {
+                        temperature: 0.5,
                     }
-                ],
-                config: {
-                    temperature: 0.7,
-                }
-            });
-            topExplanation = expl_response.text.trim();
+                });
+
+                const rawExpl = explResponse.text.trim();
+                // Truncate if still too long (safety net)
+                topExplanation = rawExpl.length > 120
+                    ? rawExpl.substring(0, rawExpl.lastIndexOf(' ', 120)) + '…'
+                    : rawExpl;
+
+            } catch (explErr) {
+                console.warn("Explanation generation failed:", explErr.message);
+                topExplanation = `Matches your vibe: ${extractedData.vibe || 'your description'}`;
+            }
         }
 
         return {

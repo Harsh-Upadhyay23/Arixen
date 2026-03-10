@@ -25,7 +25,7 @@ router.post('/chat', async (req, res) => {
         res.json(result);
     } catch (error) {
         console.error("Chat Router Error:", error);
-        res.status(500).json({ error: 'Internal server error while processing AI Request' });
+        res.status(500).json({ error: error.message || 'Internal server error while processing AI Request' });
     }
 });
 

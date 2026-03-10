@@ -20,6 +20,17 @@ router.get('/', async (req, res) => {
     }
 });
 
+// ⚠️ IMPORTANT: Specific routes MUST come before wildcard param routes
+// GET trending movies — must be before /:id to avoid Express treating "lists" as an ID
+router.get('/lists/trending', async (req, res) => {
+    try {
+        const movies = await Movie.find().sort({ rating: -1 }).limit(12);
+        res.json(movies);
+    } catch (error) {
+        res.status(500).json({ error: 'Server Error fetching trending movies' });
+    }
+});
+
 // GET movie by ID
 router.get('/:id', async (req, res) => {
     try {
@@ -28,16 +39,6 @@ router.get('/:id', async (req, res) => {
         res.json(movie);
     } catch (error) {
         res.status(500).json({ error: 'Server Error fetching movie' });
-    }
-});
-
-// GET trending movies
-router.get('/lists/trending', async (req, res) => {
-    try {
-        const movies = await Movie.find().sort({ rating: -1 }).limit(10);
-        res.json(movies);
-    } catch (error) {
-        res.status(500).json({ error: 'Server Error fetching trending movies' });
     }
 });
 

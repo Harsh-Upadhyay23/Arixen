@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import AiSearch from '../components/AiSearch';
 import MovieGrid from '../components/MovieGrid';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles, X } from 'lucide-react';
 
 const Home = () => {
     const [trending, setTrending] = useState([]);
     const [aiResults, setAiResults] = useState(null);
     const [loadingAI, setLoadingAI] = useState(false);
     const [error, setError] = useState(null);
+    const resultsRef = useRef(null);
 
     useEffect(() => {
-        // Fetch trending movies on load
         const fetchTrending = async () => {
             try {
                 const res = await axios.get('http://localhost:5000/api/v1/movies/lists/trending');
@@ -27,41 +28,54 @@ const Home = () => {
         setLoadingAI(true);
         setError(null);
         setAiResults(null);
-        
+
         try {
             const res = await axios.post('http://localhost:5000/api/v1/recommend/chat', { prompt });
-            setAiResults(res.data);
             
-            // Scroll to results smoothly
+            // Safety: ensure movies is an array, not the raw Gemini text
+            const data = res.data;
+            if (!Array.isArray(data.movies)) {
+                setError("Unexpected response from AI. Please try again.");
+                return;
+            }
+            
+            setAiResults(data);
+
             setTimeout(() => {
-                document.getElementById('ai-results-section').scrollIntoView({ behavior: 'smooth' });
-            }, 300);
-            
+                resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 200);
+
         } catch (err) {
             console.error(err);
-            setError("Failed to get AI recommendations. Make sure backend is running and Gemini API key is set.");
+            const backendError = err.response?.data?.error;
+            setError(backendError || "Could not get AI recommendations. Make sure the backend is running and your Gemini API key is set.");
         } finally {
             setLoadingAI(false);
         }
+    };
+
+    const clearResults = () => {
+        setAiResults(null);
+        setError(null);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     return (
         <div className="pb-20">
             {/* Hero Section */}
             <section className="relative h-[80vh] flex items-center justify-center overflow-hidden">
-                {/* Hero Background (Interstellar Poster as default) */}
                 <div className="absolute inset-0 z-0">
-                    <img 
-                        src="https://image.tmdb.org/t/p/original/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg" 
-                        alt="Hero Background" 
+                    <img
+                        src="https://image.tmdb.org/t/p/original/rAiYTfKGqDCRIIqo664sY9XZIvQ.jpg"
+                        alt="Hero Background"
                         className="w-full h-full object-cover opacity-30"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-darkBg via-darkBg/80 to-transparent"></div>
-                    <div className="absolute inset-0 bg-gradient-to-r from-darkBg via-darkBg/50 to-transparent"></div>
+                    <div className="absolute inset-0 bg-gradient-to-t from-darkBg via-darkBg/80 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-r from-darkBg via-darkBg/50 to-transparent" />
                 </div>
 
                 <div className="relative z-10 container mx-auto px-6 md:px-12 text-center mt-16">
-                    <motion.h1 
+                    <motion.h1
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="text-5xl md:text-7xl font-extrabold tracking-tight mb-4"
@@ -69,15 +83,15 @@ const Home = () => {
                         Find the <span className="text-netflixRed">Perfect Movie.</span>
                         <br />Instantly.
                     </motion.h1>
-                    <motion.p 
+                    <motion.p
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
                         className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10"
                     >
-                        Our AI understands your mood. Describe what you want to watch feeling right now, and let the magic happen.
+                        Our AI understands your mood. Describe what you want to watch right now, and let the magic happen.
                     </motion.p>
-                    
+
                     <motion.div
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -90,23 +104,72 @@ const Home = () => {
 
             {/* Content Section */}
             <div className="container mx-auto px-6 md:px-12 -mt-10 relative z-20">
-                {error && (
-                    <div className="bg-red-500/20 border border-red-500 text-red-100 p-4 rounded-lg mb-8 text-center">
-                        {error}
-                    </div>
-                )}
-
-                <div id="ai-results-section">
-                    {aiResults && (
-                        <div className="mb-16">
-                            <MovieGrid 
-                                title="AI Selected For You" 
-                                movies={aiResults.movies} 
-                                isAiResult={true}
-                                aiExplanation={aiResults.top_explanation}
-                            />
-                        </div>
+                <AnimatePresence>
+                    {error && (
+                        <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="bg-red-500/20 border border-red-500/50 text-red-100 p-4 rounded-xl mb-8 flex items-start gap-3"
+                        >
+                            <span className="flex-1">{error}</span>
+                            <button onClick={clearResults} className="text-red-300 hover:text-white transition-colors">
+                                <X className="w-4 h-4" />
+                            </button>
+                        </motion.div>
                     )}
+                </AnimatePresence>
+
+                {/* AI Results Section */}
+                <div ref={resultsRef}>
+                    <AnimatePresence>
+                        {aiResults && aiResults.movies.length > 0 && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 20 }}
+                                className="mb-16"
+                            >
+                                {/* Results header banner */}
+                                <div className="flex items-center justify-between mb-2 p-4 rounded-xl bg-netflixRed/10 border border-netflixRed/20">
+                                    <div className="flex items-center gap-2 text-sm text-gray-300">
+                                        <Sparkles className="w-4 h-4 text-netflixRed" />
+                                        <span>
+                                            AI found <strong className="text-white">{aiResults.movies.length} movies</strong>
+                                            {aiResults.signals?.vibe && (
+                                                <> matching <em className="text-netflixRed">"{aiResults.signals.vibe}"</em></>
+                                            )}
+                                        </span>
+                                    </div>
+                                    <button
+                                        onClick={clearResults}
+                                        className="text-gray-400 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                                    >
+                                        <X className="w-3 h-3" /> Clear
+                                    </button>
+                                </div>
+
+                                <MovieGrid
+                                    title="AI Selected For You"
+                                    movies={aiResults.movies}
+                                    isAiResult={true}
+                                    aiExplanation={aiResults.top_explanation}
+                                />
+                            </motion.div>
+                        )}
+
+                        {aiResults && aiResults.movies.length === 0 && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="text-center py-16 text-gray-500 mb-16"
+                            >
+                                <Sparkles className="w-10 h-10 mx-auto mb-3 text-gray-600" />
+                                <p className="text-lg">No movies matched your description.</p>
+                                <p className="text-sm mt-1">Try different keywords or a broader description.</p>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </div>
 
                 <MovieGrid title="Trending Now" movies={trending} />

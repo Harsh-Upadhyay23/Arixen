@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 import movieRoutes from './routes/movie.routes.js';
 import aiRoutes from './routes/ai.routes.js';
 
-// Load env vars
+// Load env variables
 dotenv.config();
 
 const app = express();
@@ -18,22 +18,33 @@ app.use(express.json());
 app.use('/api/v1/movies', movieRoutes);
 app.use('/api/v1/recommend', aiRoutes);
 
-// Health check
+// Health Check Route
 app.get('/health', (req, res) => {
-    res.status(200).json({ status: 'ok', message: 'MERN AI Movie Platform API is running.' });
+    res.status(200).json({
+        status: 'success',
+        message: 'MERN AI Movie Platform API is running 🚀'
+    });
 });
 
+// Env Variables
 const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/movieDB';
+const MONGO_URI = process.env.MONGO_URI;
 
-// Connect to DB and Start Server
-mongoose.connect(MONGO_URI)
-    .then(() => {
-        console.log('✅ Connected to MongoDB');
+// DB Connection Function (better structure)
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGO_URI);
+        console.log('✅ MongoDB Connected Successfully');
+
         app.listen(PORT, () => {
             console.log(`🚀 Server running on port ${PORT}`);
         });
-    })
-    .catch((err) => {
-        console.error('❌ MongoDB connection error:', err);
-    });
+
+    } catch (error) {
+        console.error('❌ Database connection failed:', error.message);
+        process.exit(1); // stop app if DB fails
+    }
+};
+
+// Start server
+connectDB();

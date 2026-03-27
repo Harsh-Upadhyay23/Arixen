@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, ArrowRight, Loader } from 'lucide-react';
 
 const AiSearch = ({ onSearch, loading }) => {

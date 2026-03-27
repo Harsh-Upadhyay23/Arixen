@@ -1,5 +1,4 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 import MovieCard from './MovieCard';
 import { Sparkles, Film } from 'lucide-react';
 

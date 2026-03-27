@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import AiSearch from '../components/AiSearch';
 import MovieGrid from '../components/MovieGrid';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
 
 const Home = () => {
@@ -75,30 +75,30 @@ const Home = () => {
                 </div>
 
                 <div className="relative z-10 container mx-auto px-6 md:px-12 text-center mt-16">
-                    <motion.h1
+                    <Motion.h1
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="text-5xl md:text-7xl font-extrabold tracking-tight mb-4"
                     >
                         Find the <span className="text-netflixRed">Perfect Movie.</span>
                         <br />Instantly.
-                    </motion.h1>
-                    <motion.p
+                    </Motion.h1>
+                    <Motion.p
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.1 }}
                         className="text-lg md:text-xl text-gray-300 max-w-2xl mx-auto mb-10"
                     >
                         Our AI understands your mood. Describe what you want to watch right now, and let the magic happen.
-                    </motion.p>
+                    </Motion.p>
 
-                    <motion.div
+                    <Motion.div
                         initial={{ opacity: 0, y: 30 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.2 }}
                     >
                         <AiSearch onSearch={handleAiSearch} loading={loadingAI} />
-                    </motion.div>
+                    </Motion.div>
                 </div>
             </section>
 
@@ -106,7 +106,7 @@ const Home = () => {
             <div className="container mx-auto px-6 md:px-12 -mt-10 relative z-20">
                 <AnimatePresence>
                     {error && (
-                        <motion.div
+                        <Motion.div
                             initial={{ opacity: 0, y: -10 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -10 }}
@@ -116,7 +116,7 @@ const Home = () => {
                             <button onClick={clearResults} className="text-red-300 hover:text-white transition-colors">
                                 <X className="w-4 h-4" />
                             </button>
-                        </motion.div>
+                        </Motion.div>
                     )}
                 </AnimatePresence>
 
@@ -124,7 +124,7 @@ const Home = () => {
                 <div ref={resultsRef}>
                     <AnimatePresence>
                         {aiResults && aiResults.movies.length > 0 && (
-                            <motion.div
+                            <Motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 exit={{ opacity: 0, y: 20 }}
@@ -155,11 +155,11 @@ const Home = () => {
                                     isAiResult={true}
                                     aiExplanation={aiResults.top_explanation}
                                 />
-                            </motion.div>
+                            </Motion.div>
                         )}
 
                         {aiResults && aiResults.movies.length === 0 && (
-                            <motion.div
+                            <Motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 className="text-center py-16 text-gray-500 mb-16"
@@ -167,7 +167,7 @@ const Home = () => {
                                 <Sparkles className="w-10 h-10 mx-auto mb-3 text-gray-600" />
                                 <p className="text-lg">No movies matched your description.</p>
                                 <p className="text-sm mt-1">Try different keywords or a broader description.</p>
-                            </motion.div>
+                            </Motion.div>
                         )}
                     </AnimatePresence>
                 </div>

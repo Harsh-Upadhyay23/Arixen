@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion as Motion } from 'framer-motion';
 import { Star, Play, Plus, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 
 const FALLBACK_POSTER = 'https://via.placeholder.com/300x450/1a1a2e/e50914?text=No+Poster';
@@ -11,7 +11,7 @@ const MovieCard = ({ movie, index, isAiResult = false, aiExplanation = null }) =
         : FALLBACK_POSTER;
 
     return (
-        <motion.div
+        <Motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.35, delay: index * 0.06 }}
@@ -109,7 +109,7 @@ const MovieCard = ({ movie, index, isAiResult = false, aiExplanation = null }) =
                     </button>
                 </div>
             </div>
-        </motion.div>
+        </Motion.div>
     );
 };
 

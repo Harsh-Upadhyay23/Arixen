@@ -14,8 +14,9 @@ const MovieCard = ({ movie, index, isAiResult = false, aiExplanation = null }) =
         <Motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
+            whileHover={{ y: -8, scale: 1.02 }}
             transition={{ duration: 0.35, delay: index * 0.06 }}
-            className="group flex flex-col rounded-2xl overflow-hidden bg-darkCard border border-white/5 hover:border-netflixRed/40 shadow-lg hover:shadow-netflixRed/10 transition-all duration-300"
+            className="group flex flex-col rounded-2xl overflow-hidden bg-darkCard border border-white/5 hover:border-netflixRed/40 shadow-lg hover:shadow-netflixRed/20 transition-all duration-300"
         >
             {/* Poster */}
             <div className="relative aspect-[2/3] overflow-hidden">
@@ -44,7 +45,7 @@ const MovieCard = ({ movie, index, isAiResult = false, aiExplanation = null }) =
 
                 {/* Hover Play overlay */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                    <button className="bg-netflixRed hover:bg-red-700 text-white rounded-full p-4 transition-colors shadow-xl">
+                    <button className="bg-netflixRed hover:bg-red-700 text-white rounded-full p-4 transition-all duration-300 shadow-xl group-hover:scale-110">
                         <Play className="w-5 h-5" fill="currentColor" />
                     </button>
                 </div>

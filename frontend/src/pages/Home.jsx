@@ -3,7 +3,7 @@ import axios from 'axios';
 import AiSearch from '../components/AiSearch';
 import MovieGrid from '../components/MovieGrid';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, X } from 'lucide-react';
+import { Sparkles, X, Stars } from 'lucide-react';
 
 const Home = () => {
     const [trending, setTrending] = useState([]);
@@ -72,15 +72,19 @@ const Home = () => {
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-darkBg via-darkBg/80 to-transparent" />
                     <div className="absolute inset-0 bg-gradient-to-r from-darkBg via-darkBg/50 to-transparent" />
+                    <div className="absolute inset-0 hero-grid opacity-40" />
+                    <div className="aurora-orb w-80 h-80 bg-netflixRed/50 top-[10%] left-[8%]" />
+                    <div className="aurora-orb w-96 h-96 bg-purple-500/30 bottom-[5%] right-[8%] [animation-delay:2s]" />
                 </div>
 
                 <div className="relative z-10 container mx-auto px-6 md:px-12 text-center mt-16">
                     <Motion.h1
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, ease: 'easeOut' }}
                         className="text-5xl md:text-7xl font-extrabold tracking-tight mb-4"
                     >
-                        Find the <span className="text-netflixRed">Perfect Movie.</span>
+                        Find the <span className="animated-heading">Perfect Movie.</span>
                         <br />Instantly.
                     </Motion.h1>
                     <Motion.p
@@ -98,6 +102,15 @@ const Home = () => {
                         transition={{ delay: 0.2 }}
                     >
                         <AiSearch onSearch={handleAiSearch} loading={loadingAI} />
+                    </Motion.div>
+                    <Motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.35 }}
+                        className="mt-8 inline-flex items-center gap-2 text-xs md:text-sm text-gray-300 bg-white/5 border border-white/10 px-4 py-2 rounded-full"
+                    >
+                        <Stars className="w-4 h-4 text-netflixRed" />
+                        Cinematic AI mood matching with lightning-fast recommendations
                     </Motion.div>
                 </div>
             </section>

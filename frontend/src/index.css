@@ -12,6 +12,53 @@
   .glass-panel {
     @apply bg-black/60 backdrop-blur-md border border-white/10;
   }
+
+  .aurora-orb {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(70px);
+    opacity: 0.35;
+    pointer-events: none;
+    animation: float-orb 14s ease-in-out infinite alternate;
+  }
+
+  .hero-grid {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    background-size: 36px 36px;
+    mask-image: radial-gradient(circle at center, black 15%, transparent 75%);
+  }
+}
+
+@keyframes float-orb {
+  from {
+    transform: translate3d(-15px, 0, 0) scale(1);
+  }
+  to {
+    transform: translate3d(15px, -20px, 0) scale(1.08);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animated-heading {
+  background: linear-gradient(120deg, #ffffff, #ef4444, #ffffff);
+  background-size: 250% 250%;
+  animation: gradient-shift 6s ease infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 /* Custom Scrollbar */

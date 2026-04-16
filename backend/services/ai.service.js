@@ -1,15 +1,46 @@
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import Movie from "../models/movie.model.js";
+import LRU from "lru-cache";
 
 dotenv.config();
 
+// =============================
+// ⚙️ CONFIG (Industry Standard)
+// =============================
+const CONFIG = {
+  MODEL: "gemini-2.0-flash",
+  TIMEOUT: 8000,
+  MAX_RETRIES: 2,
+  CACHE_TTL: 1000 * 60 * 10,
+};
+
+// =============================
+// 🧠 AI INIT
+// =============================
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY,
 });
 
 // =============================
-// 🔒 Safe JSON Parse (Improved)
+// 🪵 LOGGER (Replace console.log)
+// =============================
+const logger = {
+  info: (...args) => console.log("ℹ️", ...args),
+  warn: (...args) => console.warn("⚠️", ...args),
+  error: (...args) => console.error("❌", ...args),
+};
+
+// =============================
+// ⚡ LRU CACHE (Better than Map)
+// =============================
+const cache = new LRU({
+  max: 100,
+  ttl: CONFIG.CACHE_TTL,
+});
+
+// =============================
+// 🔒 SAFE JSON PARSE
 // =============================
 const safeParseJSON = (text) => {
   try {
@@ -22,13 +53,13 @@ const safeParseJSON = (text) => {
 
     return JSON.parse(cleaned);
   } catch (err) {
-    console.warn("❌ JSON Parse Failed:", err.message);
+    logger.warn("JSON Parse Failed:", err.message);
     return null;
   }
 };
 
 // =============================
-// 🎭 Normalize Genres
+// 🎭 NORMALIZE GENRES
 // =============================
 const normalizeGenres = (genres = []) =>
   [...new Set(genres)].map(
@@ -36,26 +67,42 @@ const normalizeGenres = (genres = []) =>
   );
 
 // =============================
-// ⚡ Simple Cache (reduce AI cost)
+// ⏱️ TIMEOUT WRAPPER
 // =============================
-const cache = new Map();
-const CACHE_TTL = 1000 * 60 * 10; // 10 min
+const withTimeout = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("AI Timeout")), ms)
+    ),
+  ]);
 
-const getCache = (key) => {
-  const data = cache.get(key);
-  if (!data) return null;
-  if (Date.now() > data.expiry) {
-    cache.delete(key);
-    return null;
+// =============================
+// 🔁 RETRY WRAPPER
+// =============================
+const retry = async (fn, retries = CONFIG.MAX_RETRIES) => {
+  try {
+    return await fn();
+  } catch (err) {
+    if (retries <= 0) throw err;
+    logger.warn("Retrying AI call...");
+    return retry(fn, retries - 1);
   }
-  return data.value;
 };
 
-const setCache = (key, value) => {
-  cache.set(key, {
-    value,
-    expiry: Date.now() + CACHE_TTL,
-  });
+// =============================
+// 🛡️ INPUT VALIDATION
+// =============================
+const validatePrompt = (prompt) => {
+  if (!prompt || typeof prompt !== "string") {
+    throw new Error("Invalid prompt type");
+  }
+  if (prompt.trim().length < 3) {
+    throw new Error("Prompt too short");
+  }
+  if (prompt.length > 300) {
+    throw new Error("Prompt too long");
+  }
 };
 
 // =============================
@@ -63,59 +110,52 @@ const setCache = (key, value) => {
 // =============================
 export const getAIRecommendations = async (userPrompt) => {
   try {
-    if (!userPrompt || userPrompt.trim().length < 3) {
-      throw new Error("Prompt too short");
-    }
-
-    console.log("🎯 Prompt:", userPrompt);
+    validatePrompt(userPrompt);
+    logger.info("Prompt:", userPrompt);
 
     // =============================
-    // 🧠 Check Cache
+    // ⚡ CACHE CHECK
     // =============================
-    const cached = getCache(userPrompt);
+    const cached = cache.get(userPrompt);
     if (cached) {
-      console.log("⚡ Cache hit");
+      logger.info("Cache hit");
       return cached;
     }
 
     // =============================
-    // 🤖 AI Extraction (Improved Prompt)
+    // 🤖 AI EXTRACTION
     // =============================
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      systemInstruction: `
-You are a movie recommendation parser.
-
-Extract structured data strictly in JSON format:
+    const aiCall = () =>
+      ai.models.generateContent({
+        model: CONFIG.MODEL,
+        systemInstruction: `
+Return ONLY JSON:
 
 {
-  "genres_include": ["Action", "Comedy"],
-  "genres_exclude": ["Horror"],
-  "keywords": ["revenge", "mafia"],
-  "vibe": "dark intense emotional"
+  "genres_include": [],
+  "genres_exclude": [],
+  "keywords": [],
+  "vibe": ""
 }
+        `,
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        config: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+        },
+      });
 
-Rules:
-- Genres must be common movie genres
-- Keywords = important themes
-- vibe = 3-5 descriptive words
-- DO NOT explain anything
-- ONLY return JSON
-      `,
-      contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-      config: {
-        temperature: 0.2,
-        responseMimeType: "application/json",
-      },
-    });
+    const response = await retry(() =>
+      withTimeout(aiCall(), CONFIG.TIMEOUT)
+    );
 
     let extractedData = safeParseJSON(response.text);
 
     // =============================
-    // ⚠️ Fallback Extraction
+    // ⚠️ FALLBACK
     // =============================
     if (!extractedData) {
-      console.warn("⚠️ AI JSON failed, fallback used");
+      logger.warn("Fallback extraction used");
 
       extractedData = {
         genres_include: [],
@@ -125,146 +165,13 @@ Rules:
       };
     }
 
-    console.log("🧠 Extracted:", extractedData);
+    logger.info("Extracted:", extractedData);
 
     // =============================
-    // 🔍 Build Query
+    // 🔍 BUILD QUERY
     // =============================
     const query = {};
     const includeGenres = normalizeGenres(extractedData.genres_include);
     const excludeGenres = normalizeGenres(extractedData.genres_exclude);
 
-    if (includeGenres.length) {
-      query.genres = { $in: includeGenres };
-    }
-
-    if (excludeGenres.length) {
-      query.genres = {
-        ...(query.genres || {}),
-        $nin: excludeGenres,
-      };
-    }
-
-    let movies = [];
-
-    // =============================
-    // 🔎 TEXT SEARCH (BOOSTED)
-    // =============================
-    if (extractedData.keywords?.length) {
-      const searchString = extractedData.keywords.join(" ");
-
-      try {
-        movies = await Movie.find({
-          ...query,
-          $text: { $search: searchString },
-        })
-          .select({
-            score: { $meta: "textScore" },
-            title: 1,
-            genres: 1,
-            rating: 1,
-            overview: 1,
-          })
-          .sort({
-            score: { $meta: "textScore" },
-            rating: -1,
-          })
-          .limit(10);
-      } catch (err) {
-        console.warn("⚠️ Text search failed:", err.message);
-      }
-    }
-
-    // =============================
-    // 📉 Fallback Strategy (Smarter)
-    // =============================
-    if (!movies.length) {
-      movies = await Movie.find(query)
-        .sort({ rating: -1 })
-        .limit(10);
-    }
-
-    if (!movies.length) {
-      movies = await Movie.find()
-        .sort({ rating: -1 })
-        .limit(10);
-    }
-
-    // =============================
-    // 🎯 VIBE SCORING (NEW 🔥)
-    // =============================
-    const vibeWords = extractedData.vibe.split(" ");
-
-    movies = movies.map((movie) => {
-      const text =
-        (movie.overview || "") + " " + movie.genres.join(" ");
-
-      let score = 0;
-
-      vibeWords.forEach((word) => {
-        if (text.toLowerCase().includes(word.toLowerCase())) {
-          score += 1;
-        }
-      });
-
-      return { ...movie.toObject(), vibeScore: score };
-    });
-
-    movies.sort((a, b) => b.vibeScore - a.vibeScore || b.rating - a.rating);
-
-    movies = movies.slice(0, 6);
-
-    // =============================
-    // 🧠 AI Explanation
-    // =============================
-    let explanation = null;
-
-    if (movies.length) {
-      try {
-        const expl = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          systemInstruction:
-            "Explain recommendation in 1 short sentence under 12 words.",
-          contents: [
-            {
-              role: "user",
-              parts: [
-                {
-                  text: `User: ${userPrompt}, Movie: ${movies[0].title}`,
-                },
-              ],
-            },
-          ],
-        });
-
-        explanation = expl.text.trim().slice(0, 100);
-      } catch {
-        explanation = `Perfect match for your vibe: ${extractedData.vibe}`;
-      }
-    }
-
-    // =============================
-    // 📦 Final Response
-    // =============================
-    const result = {
-      success: true,
-      signals: extractedData,
-      movies,
-      top_explanation: explanation,
-    };
-
-    // =============================
-    // ⚡ Save Cache
-    // =============================
-    setCache(userPrompt, result);
-
-    return result;
-  } catch (error) {
-    console.error("❌ AI Error:", error.message);
-
-    return {
-      success: false,
-      message: "Failed to get recommendations",
-    };
-  }
-};
+    if (include
